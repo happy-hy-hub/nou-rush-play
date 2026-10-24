@@ -22,16 +22,73 @@ const RARITY_BONUS = { N: 1, R: 2, SR: 4, SSR: 8 }; // 図鑑ボーナス(XP%)
 const KEY = 'nouRush.v1';
 function fresh() {
   return {
-    xp: 0, level: 1, coins: 100, streak: 0, lastPlay: null, best: {}, srs: {}, mon: {}, pity: 0, daily: null,
+    v: 2, xp: 0, level: 1, coins: 100, streak: 0, lastPlay: null, best: {}, srs: {}, mon: {}, pity: 0, daily: null,
     stats: { plays: 0, correct: 0, answered: 0, maxCombo: 0, pulls: 0 }, sound: true, seenUnlock: 1,
   };
 }
+// ---------- データを失わないための仕組み ----------
+// ・保存形式に版番号（v）を付け、古い形式は migrate() で新しい形式へ移す（消さない）
+// ・新しく増えた項目は既定値で補う（深いマージ）
+// ・読めないデータは上書きせず退避し、自動バックアップから復元する
+// ・1日1回スナップショットを自動で残す（最新5日分）
+const SAVE_VERSION = 2, BAK = KEY + '.bak.', BAK_KEEP = 5;
+const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
+function deepFill(dst, def) {
+  for (const k in def) { if (dst[k] === undefined) dst[k] = def[k]; else if (isObj(dst[k]) && isObj(def[k])) deepFill(dst[k], def[k]); }
+  return dst;
+}
+function migrate(s, v = s.v || 1) {
+  if (v < 2) {
+    // 問題（復習の記録）と証拠カードのキーを「番号」から「内容」へ。対応が取れないものも消さずに残す
+    const tsrs = {};
+    Object.entries(s.tsrs || {}).forEach(([k, val]) => {
+      const [tid, ci, qi] = k.split('|'), t = THEMES.find(x => x.id === tid);
+      const ok = t && /^\d+$/.test(ci) && t.chapters[+ci] && t.chapters[+ci].questions[+qi];
+      tsrs[ok ? qKey(t, +ci, +qi) : k] = val;
+    });
+    s.tsrs = tsrs;
+    Object.entries(s.themes || {}).forEach(([tid, st]) => {
+      const t = THEMES.find(x => x.id === tid), cards = {};
+      Object.keys(st.cards || {}).forEach(k => {
+        const [ci, fi] = k.split('-').map(Number), ok = t && t.chapters[ci] && t.chapters[ci].facts[fi];
+        cards[ok ? fKey(t, ci, fi) : k] = 1;
+      });
+      st.cards = cards;
+    });
+  }
+  s.v = SAVE_VERSION;
+  return s;
+}
+const backups = () => { try { return Object.keys(localStorage).filter(k => k.startsWith(BAK)).sort().reverse(); } catch (e) { return []; } };
+// 版番号は既定値で補う前に読む（先に補うと「最新版」と誤認して移行が飛ばされる）
+function parseSave(raw) { const s = JSON.parse(raw); if (!isObj(s)) throw new Error('bad'); const v = s.v || 1; return migrate(deepFill(s, fresh()), v); }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) return Object.assign(fresh(), s); } catch (e) { }
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { }
+  if (raw) {
+    try {
+      const s = JSON.parse(raw);
+      if ((s.v || 1) < SAVE_VERSION) try { localStorage.setItem(`${BAK}pre-v${SAVE_VERSION}`, raw); } catch (e) { } // 移行前の控え
+      return parseSave(raw);
+    } catch (e) { try { localStorage.setItem(`${KEY}.broken.${Date.now()}`, raw); } catch (_) { } }
+  }
+  for (const k of backups()) { try { return parseSave(localStorage.getItem(k)); } catch (e) { } }
   return fresh();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
+function save() {
+  try {
+    const json = JSON.stringify(S);
+    localStorage.setItem(KEY, json);
+    const today = BAK + dayStr();
+    if (!localStorage.getItem(today)) {
+      localStorage.setItem(today, json);
+      backups().filter(k => /\d{4}-\d\d-\d\d$/.test(k)).slice(BAK_KEEP).forEach(k => localStorage.removeItem(k));
+    }
+  } catch (e) { }
+}
 let S = load();
+// ブラウザに「このデータは消さないで」と頼む（iPhone のホーム画面アプリ等で有効）
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { }
 
 // ---------- レベル・ランク ----------
 const needXP = l => Math.round(60 * Math.pow(l, 1.35) + 40);
@@ -164,53 +221,8 @@ function hud() {
     <div class="pill" title="コイン">🪙 <span id="coinv">${S.coins}</span></div>
   </div>`;
 }
-function renderHome() {
-  screen = 'home'; ensureDaily(); document.body.classList.remove('fever-bg');
-  const st = curStreak(), playedToday = S.lastPlay === dayStr();
-  let warn = '';
-  if (!playedToday && st > 0) warn = `<div class="warn">⚠️ 今日プレイしないと 🔥${st}日連続 が途切れる！</div>`;
-  else if (!playedToday) warn = `<div class="warn">🔥 今日の1プレイで連続記録スタート！</div>`;
-
-  const D = S.daily, allDone = D.list.every(m => m.claimed);
-  const missions = D.list.map((m, i) => {
-    const done = m.prog >= m.goal, pct = Math.min(100, m.prog / m.goal * 100);
-    const right = m.claimed ? `<span class="done">✓ 受取済</span>`
-      : done ? `<button class="claim" data-act="claim:${i}">🪙${m.reward} 受取</button>`
-        : `<span class="ghost">🪙${m.reward}</span>`;
-    return `<div class="mission"><div class="mt">${esc(missionText(m))}
-      <div class="ghost">${Math.min(m.prog, m.goal).toLocaleString()} / ${m.goal.toLocaleString()}</div>
-      <div class="bar"><i style="width:${pct}%"></i></div></div>${right}</div>`;
-  }).join('');
-  const chest = D.chest ? `<div class="chest">🎉 今日のミッション完全制覇！また明日！</div>`
-    : allDone ? `<div class="chest"><button class="btn primary" data-act="chest">🎁 全達成ボーナス 200🪙 を開ける</button></div>`
-      : `<div class="chest">3つ全部クリアで 🎁 ボーナス宝箱</div>`;
-
-  const decks = DECKS.map(d => {
-    const locked = S.level < d.unlock, ds = deckStat(d), best = S.best[d.id] || 0;
-    const isNew = !locked && d.unlock > 1 && d.unlock === S.seenUnlock && !best;
-    const mast = ds ? `<div class="bar"><i style="width:${ds.mastery * 100}%"></i></div>
-      <div class="meta" style="margin-top:5px"><span>習得 ${Math.round(ds.mastery * 100)}%</span><span>🏆${best.toLocaleString()}</span></div>`
-      : `<div class="bar"><i style="width:0"></i></div><div class="meta" style="margin-top:5px"><span>∞ 無限出題</span><span>🏆${best.toLocaleString()}</span></div>`;
-    const badge = locked ? '' : isNew ? `<span class="badge">NEW</span>` : ds && ds.wrong ? `<span class="badge">復習${ds.wrong}</span>` : '';
-    return `<button class="deck ${locked ? 'locked' : ''}" data-lv="${d.unlock}" style="--c:${d.color}" data-act="${locked ? 'locked:' + d.unlock : 'play:' + d.id}">
-      ${badge}<div class="ic">${d.icon}</div><div class="nm">${esc(d.name)}</div>${mast}</button>`;
-  }).join('');
-
-  const owned = Object.keys(S.mon).length, canPull = S.coins >= GACHA_COST;
-  const last = DECKS.find(d => d.id === S.lastDeck) || DECKS[0], ls = deckStat(last);
-  const quick = `<button class="btn primary big" style="width:100%;margin-bottom:12px" data-act="play:${last.id}">▶ ${last.icon} ${esc(last.name)}
-    <span class="sub">${ls && ls.wrong ? `間違えた${ls.wrong}問にリベンジ！` : S.best[last.id] ? `ベスト ${S.best[last.id].toLocaleString()} を超えろ！` : 'まずは1プレイ（約1分）'}</span></button>`;
-  app.innerHTML = `${hud()}${warn}${typeof themeSection === 'function' ? themeSection() : ''}${quick}
-    <div class="card"><h3><span>📋 今日のミッション</span><span class="ghost">毎日0時に更新</span></h3>${missions}${chest}</div>
-    <div class="decks">${decks}</div>
-    <div class="row">
-      <button class="btn ${canPull ? 'primary' : ''}" data-act="gacha">🎰 ガチャ<span class="sub">${canPull ? `${Math.floor(S.coins / GACHA_COST)}回引ける！` : `あと${GACHA_COST - S.coins}🪙`}</span></button>
-      <button class="btn" data-act="dex">📖 図鑑<span class="sub">${owned}/${CREATURES.length} ・ XP+${collectionBonus()}%</span></button>
-    </div>
-    <div class="foot">通算 ${S.stats.plays}プレイ ・ ${S.stats.correct}問正解 ・ 最大${S.stats.maxCombo}コンボ<br>
-      <button data-act="sound">${S.sound ? '🔊 サウンドON' : '🔇 サウンドOFF'}</button> ・ <button data-act="reset">データ初期化</button></div>
-    ${location.protocol === 'https:' ? `<button class="btn" style="width:100%;margin-top:12px" data-act="share">📲 友達に送る<span class="sub">iPhoneは Safari で開いて「ホーム画面に追加」</span></button>` : ''}`;
-}
+// ホーム＝最後に開いていたタブ（タブの中身は app.js）
+function renderHome() { goTab(S.tab || 'tower'); }
 
 // ============================================================
 //  画面: プレイ
@@ -483,19 +495,16 @@ function levelUpModal(oldLevel) {
 // ============================================================
 function renderGacha() {
   screen = 'gacha';
-  app.innerHTML = `<div class="title"><button class="back" data-act="home">←</button><h2>🎰 学びガチャ</h2><div class="pill">🪙 ${S.coins}</div></div>
+  app.innerHTML = `${hud()}
     ${typeof roleBanner === 'function' ? roleBanner() : ''}
-    <div class="card" style="text-align:center">
-      <div class="capsule" style="animation:none">🥚</div>
-      <p class="ghost">集めたキャラの数だけ <b style="color:var(--xp)">獲得XPがずっとアップ</b>！<br>N+1% / R+2% / SR+4% / SSR+8%</p>
-      <p>SSR確定まで あと <b style="color:var(--accent)">${PITY - S.pity}</b> 回</p>
-    </div>
-    <div class="row" style="margin-bottom:12px">
-      <button class="btn primary" data-act="pull1" ${S.coins < GACHA_COST ? 'disabled' : ''}>1回<span class="sub">🪙${GACHA_COST}</span></button>
-      <button class="btn primary" data-act="pull10" ${S.coins < GACHA10_COST ? 'disabled' : ''}>10連（SR以上1体確定）<span class="sub">🪙${GACHA10_COST}（1回おトク）</span></button>
-    </div>
-    ${S.coins < GACHA_COST ? `<div class="card ghost" style="text-align:center">コインが足りない… 遊んで貯めよう！<br><button class="btn primary" style="margin-top:10px;width:100%" data-act="home">学習しに行く</button></div>` : ''}
-    <div class="card"><h3><span>提供割合</span></h3><div class="ghost">SSR 3% ・ SR 10% ・ R 30% ・ N 57%<br>ダブったら 🪙${DUP_REFUND} 返却</div></div>`;
+    <div class="card gcard"><h3><span>🥚 キャラガチャ</span><span class="ghost">SSR確定まで ${PITY - S.pity}回</span></h3>
+      <p class="ghost">集めたキャラの数だけ獲得XPがずっとUP（今 <b style="color:var(--xp)">XP+${collectionBonus()}%</b>）</p>
+      <div class="mgrid three">
+        <button class="btn primary" data-act="pull1" ${S.coins < GACHA_COST ? 'disabled' : ''}>1回<span class="sub">🪙${GACHA_COST}</span></button>
+        <button class="btn primary" data-act="pull10" ${S.coins < GACHA10_COST ? 'disabled' : ''}>10連<span class="sub">🪙${GACHA10_COST}・SR確定</span></button>
+        <button class="btn" data-act="dex">📖 図鑑<span class="sub">${Object.keys(S.mon).length}/${CREATURES.length}</span></button>
+      </div>
+      <div class="ghost" style="margin-top:6px;font-size:11px">SSR 3%・SR 10%・R 30%・N 57% ／ ダブりは🪙${DUP_REFUND}返却</div></div>`;
 }
 function roll(minSR) {
   S.pity++; S.stats.pulls++;
@@ -577,7 +586,10 @@ function onAct(e) {
       modal(`<div class="bigemoji">🎁</div><h2>+200 🪙</h2><p>今日のミッション完全制覇！</p><button class="btn primary" style="width:100%" data-act="close">受け取る</button>`);
       renderHome(); break;
     }
-    case 'sound': S.sound = !S.sound; save(); renderHome(); break;
+    case 'gotab': goTab(arg); break;
+    case 'backup': backupModal(); break;
+    case 'bkcopy': case 'bkfile': case 'bkpaste': case 'bkrestore': backupAct(act, b.dataset.act.slice(act.length + 1)); break;
+    case 'sound': S.sound = !S.sound; save(); renderMore(); break;
     case 'share': {
       const url = location.href.split('#')[0].replace(/index\.html.*$/, '');
       const data = { title: '脳トレ・ラッシュ', text: '調べたテーマで遊ぶ学習ローグライク。ホーム画面に追加するとアプリみたいに遊べるよ', url };

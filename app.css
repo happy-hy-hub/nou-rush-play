@@ -1,0 +1,135 @@
+/* ============================================================
+   iPhone 向けの骨組み：1画面に収める・下部タブ
+   （既存の style/theme/rogue.css の上書き。最後に読み込む）
+   ============================================================ */
+html,body{height:100%;overflow:hidden}
+#app{height:100vh;height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+body.has-tabs #app{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+
+/* ---------- 下部タブ ---------- */
+#tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:center;
+  background:rgba(20,17,43,.96);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+#tabbar[hidden]{display:none}
+#tabbar button{flex:1;max-width:120px;display:flex;flex-direction:column;align-items:center;color:var(--dim);padding:5px 0;position:relative;border-radius:14px}
+#tabbar button span{font-size:22px;line-height:1.15}
+#tabbar button small{font-size:10px;font-weight:800}
+#tabbar button.on{color:var(--text);background:var(--card)}
+#tabbar .dot{position:absolute;top:4px;right:calc(50% - 18px);width:9px;height:9px;border-radius:50%;background:var(--bad)}
+#tabbar .num{position:absolute;top:0;right:calc(50% - 30px);font-style:normal;font-size:10px;font-weight:800;background:var(--bad);color:#fff;border-radius:8px;padding:0 5px}
+body.has-tabs #toast{bottom:calc(84px + env(safe-area-inset-bottom))}
+
+/* ---------- 共通の小さめレイアウト ---------- */
+.hud{margin-bottom:10px}
+.lvl{width:46px;height:46px}.lvl b{width:37px;height:37px;font-size:16px}
+.card{padding:12px;margin-bottom:10px}
+.card h3{margin-bottom:6px}
+.wide{width:100%;display:block}
+.btn.wide{margin-bottom:8px}
+.btn.big{padding:14px;font-size:20px}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.mgrid.two{grid-template-columns:1fr 1fr}.mgrid.three{grid-template-columns:repeat(3,1fr)}
+.mgrid .btn{padding:10px 4px;font-size:14px}
+.mgrid .btn .sub{font-size:10px}
+.warn{padding:8px 12px;font-size:13px;margin-bottom:10px}
+.foot{margin-top:6px}
+
+/* ---------- 🏰 塔（ホーム） ---------- */
+.tchips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 10px;padding:0 16px 2px;scrollbar-width:none}
+.tchips::-webkit-scrollbar{display:none}
+.tchip{flex:none;display:flex;align-items:center;gap:6px;background:var(--card);border-radius:999px;padding:7px 14px 7px 8px;font-weight:800;font-size:13px;
+  border:2px solid transparent;white-space:nowrap;position:relative}
+.tchip span{font-size:18px}
+.tchip.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 30%,var(--card))}
+.tchip i{font-style:normal;color:var(--accent);font-size:10px;margin-left:2px}
+.dgs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.dg{display:flex;flex-direction:column;align-items:center;padding:6px 2px;border-radius:12px;position:relative;min-height:52px}
+.dg .dge{font-size:20px}
+.dg .dgn{font-size:10.5px;font-weight:800;line-height:1.2}
+.dg i{position:absolute;top:1px;right:3px;font-style:normal;font-size:10px}
+.tower-hero{display:flex;gap:12px;align-items:center;text-align:left;padding:12px;margin-bottom:10px;position:relative}
+.tower-hero .th-e{font-size:46px;flex:none}
+.th-b{flex:1;min-width:0}
+.th-n{font-weight:900;font-size:18px}
+.th-d{font-size:11.5px;color:#dcd8ff;line-height:1.45;margin:2px 0}
+.th-boss{font-size:12px;color:#ff8fa3}
+.tower-hero .tstats{justify-content:flex-start;gap:12px;margin-top:4px}
+.tower-hero .tstats b{font-size:14px}
+.howbtn{position:absolute;top:6px;right:8px;font-size:16px;opacity:.8}
+.roles{grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px}
+.role{padding:6px 2px;display:flex;flex-direction:column;align-items:center;min-height:56px}
+.role .re{font-size:22px}
+.role .rn{font-size:10px;font-weight:800}
+.role i{font-style:normal;font-size:8px;color:var(--accent);line-height:1}
+.roledesc{padding:8px 10px;margin-bottom:8px;font-size:12px;line-height:1.5}
+.linkbtn{color:var(--accent);font-weight:800;font-size:12px;text-decoration:underline}
+.diffrow{display:flex;gap:6px;align-items:stretch;margin-bottom:4px}
+.diffrow .diffs{flex:1;margin:0;gap:5px}
+.diff{padding:8px 2px;font-weight:800;font-size:12px;position:relative;white-space:nowrap;letter-spacing:-.3px}
+.diff i{font-style:normal;font-size:9px;position:absolute;top:0;right:3px}
+.diffrow .asc{flex:none;display:flex;align-items:center;gap:2px;margin:0;background:var(--card);border-radius:14px;padding:0 4px}
+.diffrow .asc button{padding:6px 6px;color:var(--dim);font-size:14px}
+.diffrow .asc b{font-size:13px;min-width:24px;text-align:center}
+.diffdesc{text-align:center;font-size:11px;margin:2px 0 8px;line-height:1.4}
+.contbox{background:var(--card);border-radius:14px;padding:12px;margin-bottom:10px;text-align:center}
+.cont-l{font-weight:900;font-size:18px}
+
+/* ---------- 🗺️ 探検 ---------- */
+.theme{padding:10px}
+.theme .ti{font-size:36px}
+.theme .tl{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+/* テーマ地図：ジグザグの道ではなく2列のタイル（10章でも1画面） */
+.map{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.map .path{display:none}
+.node{width:auto !important;padding:8px 10px;gap:8px}
+.node .ni{width:38px;height:38px;font-size:22px}
+.node .nt{font-size:12.5px;line-height:1.3}
+.node.final{grid-column:1/-1}
+.mystery{padding:10px 12px}
+.mystery .mq{font-size:14px;margin:2px 0 6px}
+.tower-btn{padding:10px}
+
+/* ---------- 🎰 ガチャ ---------- */
+.rbanner p{font-size:11px;line-height:1.5}
+.rlist .ri{font-size:26px}
+.gcard p{margin:0 0 8px;font-size:12px}
+
+/* ---------- 📋 その他 ---------- */
+.mission{padding:5px 0;gap:8px}
+.mission .mt{font-size:13px}
+.mission .bar{height:6px;margin-top:3px}
+.mdecks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.mdeck{background:var(--card2);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;border-top:3px solid var(--c);position:relative}
+.mdeck span{font-size:20px}
+.mdeck b{font-size:11px}
+.mdeck small{font-size:10px;color:var(--dim)}
+.mdeck.locked{opacity:.45}
+.mdeck .dot{position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad)}
+
+/* ---------- 💾 引き継ぎ ---------- */
+#bkcode{width:100%;background:#1a1640;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:8px;font:12px/1.4 monospace;margin-bottom:8px;resize:none}
+.bklist{max-height:30vh;overflow:auto;text-align:left}
+.bk{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
+.bk .btn{flex:none;padding:6px 12px;font-size:12px}
+.modal .box{max-height:calc(100dvh - 32px);overflow-y:auto}
+
+/* ---------- 知の塔：地図を画面の高さに合わせる ---------- */
+.mnode{width:var(--nd,48px);height:var(--nd,48px);font-size:calc(var(--nd,48px) * .5)}
+.mnode.boss{width:calc(var(--nd,48px) * 1.3);height:calc(var(--nd,48px) * 1.3);font-size:calc(var(--nd,48px) * .75)}
+.legend{font-size:10px;gap:6px}
+
+/* 小さい画面（iPhone SE など）ではさらに詰める */
+@media (max-height:700px){
+  .tower-hero .th-e{font-size:36px}
+  .th-d{display:none}
+  .role{min-height:48px}.role .re{font-size:19px}
+  .btn.big{padding:11px;font-size:18px}
+  .roledesc{font-size:11px}
+}
+/* テーマ地図：導入文は中心の謎と重なるので省き、章タイルを1画面に */
+.intro{display:none}
+.node .st{font-size:12px}
+.node{padding:6px 8px}
+.node .ni{width:32px;height:32px;font-size:19px}
+.tower-btn{padding:8px}
+.mystery .bar{height:6px}

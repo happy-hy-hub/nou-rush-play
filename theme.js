@@ -45,11 +45,14 @@ function tst(id) {
   return S.themes[id] || (S.themes[id] = { stars: [], cards: {}, finale: false, seen: [] });
 }
 const tsrs = () => S.tsrs || (S.tsrs = {});
-const qKey = (t, ci, qi) => `${t.id}|${ci}|${qi}`;
+// 問題キー → 問題 の索引（キーは data.js の qKey。内容から作るので並べ替えに強い）
+let QIDX = null;
 function lookupQ(key) {
-  const [tid, ci, qi] = key.split('|'), t = THEMES.find(x => x.id === tid);
-  const q = t && t.chapters[+ci] && t.chapters[+ci].questions[+qi];
-  return q ? { key, t, ci: +ci, qi: +qi, q } : null;
+  if (!QIDX) {
+    QIDX = new Map();
+    THEMES.forEach(t => t.chapters.forEach((c, ci) => c.questions.forEach((q, qi) => { const k = qKey(t, ci, qi); if (!QIDX.has(k)) QIDX.set(k, { key: k, t, ci, qi, q }); })));
+  }
+  return QIDX.get(key) || null;
 }
 function dueKeys() {
   const now = Date.now();
@@ -104,7 +107,7 @@ function renderTheme(id) {
   const st = tst(t.id), p = progressOf(t);
   const nodes = t.chapters.map((c, i) => {
     const open = chapterOpen(t, i), s = st.stars[i] || 0;
-    const facts = c.facts.filter((_, fi) => st.cards[`${i}-${fi}`]).length;
+    const facts = c.facts.filter((_, fi) => st.cards[fKey(t, i, fi)]).length;
     const cur = open && !s;
     return `<button class="node ${open ? '' : 'locked'} ${cur ? 'cur' : ''} ${i % 2 ? 'r' : 'l'}" data-act="${open ? 'chap:' + i : 'tlocked'}">
       <div class="ni">${open ? c.icon : '🔒'}</div>
@@ -135,7 +138,7 @@ function renderEvidence() {
   screen = 'tev';
   app.innerHTML = `<div class="title"><button class="back" data-act="theme:${t.id}">←</button><h2>🃏 証拠ファイル</h2><div class="pill">${ownedFacts(t)}/${totalFacts(t)}</div></div>
     ${t.chapters.map((c, ci) => `<div class="card"><h3><span>${c.icon} 第${ci + 1}章 ${esc(c.title)}</span></h3>
-      <div class="facts">${c.facts.map((f, fi) => st.cards[`${ci}-${fi}`]
+      <div class="facts">${c.facts.map((f, fi) => st.cards[fKey(t, ci, fi)]
         ? `<button class="fact ${f.rarity}" data-act="fact:${ci}-${fi}"><span class="rar ${f.rarity}">${f.rarity}</span><div>${esc(f.text)}</div></button>`
         : `<div class="fact unk"><span class="rar ${f.rarity}">${f.rarity}</span><div>？？？</div></div>`).join('')}</div></div>`).join('')}`;
 }
@@ -234,7 +237,7 @@ function renderQ() {
 // 目の前に吊られたごほうび：次の証拠確定までの距離を常に見せる
 function dropGauge() {
   if (TR.review) return '';
-  const t = TR.t, st = tst(t.id), left = t.chapters[TR.ci].facts.filter((_, fi) => !st.cards[`${TR.ci}-${fi}`]).length;
+  const t = TR.t, st = tst(t.id), left = t.chapters[TR.ci].facts.filter((_, fi) => !st.cards[fKey(t, TR.ci, fi)]).length;
   if (!left) return '🃏 この章の証拠はコンプリート！';
   const n = DROP_PITY + 1 - TR.dropMiss;
   return `🃏 証拠確定まで あと${n}正解 ・ 残り${left}枚`;
@@ -318,7 +321,7 @@ function showFeedback(q, label, cls, msg, drop) {
 function rollDrop(conf) {
   const t = TR.t || lookupQ(TR.qs[TR.i].key).t, st = tst(t.id);
   const ci = TR.ci >= 0 ? TR.ci : TR.qs[TR.i].ci;
-  const pool = t.chapters[ci].facts.map((f, fi) => ({ f, fi, ci })).filter(x => !st.cards[`${x.ci}-${x.fi}`])
+  const pool = t.chapters[ci].facts.map((f, fi) => ({ f, fi, ci })).filter(x => !st.cards[fKey(t, x.ci, x.fi)])
     .filter(x => x.f.rarity !== 'SSR' || TR.combo >= 4 || conf === 3);
   if (!pool.length) return null;
   const p = DROP_BASE + (hasRelic('robber') ? 0.2 : 0) + (conf === 3 ? 0.15 : 0) + (ruleIs('drop') ? 0.15 : 0);
@@ -327,7 +330,7 @@ function rollDrop(conf) {
   const tot = pool.reduce((s, x) => s + RARITY_W[x.f.rarity], 0);
   let r = Math.random() * tot;
   const pick = pool.find(x => (r -= RARITY_W[x.f.rarity]) <= 0) || pool[0];
-  st.cards[`${pick.ci}-${pick.fi}`] = 1; save();
+  st.cards[fKey(t, pick.ci, pick.fi)] = 1; save();
   const d = { t, ...pick }; TR.drops.push(d); return d;
 }
 function nextStep() {
@@ -368,10 +371,10 @@ function endRun(cleared) {
     stars = 1 + (r.correct / Math.max(1, total) >= 0.8 ? 1 : 0) + (r.wrong === 0 && r.near === 0 ? 1 : 0);
     const st = tst(t.id); st.stars[r.ci] = Math.max(st.stars[r.ci] || 0, stars);
     // クリア時は最低1枚保証、★3ならSSR優先
-    const left = t.chapters[r.ci].facts.map((f, fi) => ({ f, fi, ci: r.ci })).filter(x => !st.cards[`${x.ci}-${x.fi}`]);
+    const left = t.chapters[r.ci].facts.map((f, fi) => ({ f, fi, ci: r.ci })).filter(x => !st.cards[fKey(t, x.ci, x.fi)]);
     if (left.length && (!r.drops.length || stars === 3)) {
       const pick = stars === 3 ? left.sort((a, b) => RARITY_W[a.f.rarity] - RARITY_W[b.f.rarity])[0] : left[rand(left.length)];
-      st.cards[`${pick.ci}-${pick.fi}`] = 1; r.drops.push({ t, ...pick, bonus: true });
+      st.cards[fKey(t, pick.ci, pick.fi)] = 1; r.drops.push({ t, ...pick, bonus: true });
     }
     extra = 30 * stars;
   }

@@ -1,6 +1,10 @@
 // 調査済みテーマパック（themes/*.js が registerTheme で登録する）
 const THEMES = [];
 function registerTheme(t) { if (!THEMES.some(x => x.id === t.id)) THEMES.push(t); }
+// 進捗のキーは「何番目か」ではなく「内容」から作る（問題の追加・並べ替えをしても記録がずれない）
+const chash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
+const qKey = (t, ci, qi) => `${t.id}|q${chash(t.chapters[ci].questions[qi].q)}`;
+const fKey = (t, ci, fi) => `f${chash(t.chapters[ci].facts[fi].text)}`;
 
 // 学習データ。各デッキの items は [表, 裏] のペア。
 // 選択肢のダミーは同じデッキの別アイテムから自動生成する。

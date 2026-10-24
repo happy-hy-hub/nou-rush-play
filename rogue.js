@@ -189,8 +189,8 @@ function saveRun() { S.rgRun = RG; save(); }
 // ============================================================
 let RGE = null; // 入口画面で選択中のテーマ
 function rogueEntry(tid) {
-  const t = THEMES.find(x => x.id === tid);
-  RGE = tid; TT = t; RG = null;
+  const t = THEMES.find(x => x.id === tid) || THEMES[0];
+  tid = t.id; RGE = tid; TT = t; RG = null; S.towerTid = tid; S.tab = 'tower';
   const ds = dungeons();
   const winsOf = d => rMeta(metaKey(tid, d.id)).wins || 0;
   const cleared = ds.filter(d => winsOf(d) > 0).length;
@@ -198,34 +198,38 @@ function rogueEntry(tid) {
   S.rgDgSel = S.rgDgSel || {};
   RGD = ds.length ? (ds.find(d => d.id === S.rgDgSel[tid] && !locked(d)) || ds[0]).id : null;
   const m = rMeta(metaKey(tid, RGD));
-  const picker = ds.length ? `<div class="dgs">${ds.map(d => {
+  const cont = S.rgRun && S.rgRun.tid === tid;
+  const dgRun = cont && S.rgRun.dg && ds.find(d => d.id === S.rgRun.dg);
+  const runElsewhere = S.rgRun && S.rgRun.tid !== tid && THEMES.find(x => x.id === S.rgRun.tid);
+  const asc = Math.min(m.asc, RG_MAX_ASC), ascSel = S.rgAscSel ?? asc;
+  const chs = dgChapters(t), qn = chs.reduce((s, i) => s + t.chapters[i].questions.length, 0);
+  screen = 'rg-entry';
+  // テーマ切り替え（横に並ぶチップ）
+  const themes = `<div class="tchips">${THEMES.map(x => `<button class="tchip ${x.id === tid ? 'on' : ''}" style="--c:${x.color}" data-act="rgtheme:${x.id}">
+    <span>${x.icon}</span>${esc(x.title.replace(/の謎$/, ''))}${S.rgRun && S.rgRun.tid === x.id ? '<i>●</i>' : ''}</button>`).join('')}</div>`;
+  const picker = ds.length && !cont ? `<div class="dgs">${ds.map(d => {
     const mm = rMeta(metaKey(tid, d.id)), lk = locked(d);
     return `<button class="dg ${RGD === d.id ? 'on' : ''} ${lk ? 'locked' : ''}" data-act="${lk ? 'rgdglock:' + d.unlock : 'rgdg:' + d.id}">
-      <div class="dge">${lk ? '🔒' : d.e}</div><div class="dgn">${esc(d.n)}</div>
-      <div class="ghost">${lk ? `${d.unlock}つ踏破で解放` : mm.wins ? `👑 踏破${mm.wins}` : mm.best ? `最高${mm.best}階` : '未挑戦'}</div></button>`;
+      <span class="dge">${lk ? '🔒' : d.e}</span><span class="dgn">${esc(d.n.replace(/の塔$/, ''))}</span>${mm.wins ? '<i>👑</i>' : ''}</button>`;
   }).join('')}</div>` : '';
-  const dgRun = S.rgRun && S.rgRun.dg && ds.find(d => d.id === S.rgRun.dg);
-  screen = 'rg-entry';
-  const cont = S.rgRun && S.rgRun.tid === tid;
-  const asc = Math.min(m.asc, RG_MAX_ASC);
-  app.innerHTML = `<div class="title"><button class="back" data-act="theme:${tid}">←</button><h2>⚔️ ${esc(ds.length ? SK().tower || '知の塔' : towerName())}</h2><div class="pill">🪙 ${S.coins}</div></div>
-    ${cont ? '' : picker}
-    <div class="tower-hero" style="--c:${t.color}"><div class="th-e">${heroE()}</div><div class="ghost">${t.icon} ${esc(t.title)}</div>
-      <h2>${esc(towerName())}に挑む</h2>${DG() && DG().desc ? `<p><i>${esc(DG().desc)}</i></p>` : SK().intro ? `<p><i>${esc(SK().intro)}</i></p>` : ''}<p>${dgChapters(t).length < t.chapters.length ? dgChapters(t).map(i => t.chapters[i].icon + t.chapters[i].title).join('・') + ' の' : '全'}${dgChapters(t).reduce((s, i) => s + t.chapters[i].questions.length, 0)}問から出題。毎ターンの「知識チャージ」で力を得て、デッキを鍛え、頂上の<b>${esc(bossName(t))}</b>を倒せ。</p>
-      <div class="tstats"><span>最高到達 <b>${m.best}</b>階</span><span>踏破 <b>${m.wins}</b>回</span><span>挑戦 <b>${m.runs}</b>回</span></div></div>
-    ${cont ? `<button class="btn primary big" style="width:100%;margin-bottom:10px" data-act="rgcont">▶ 続きから（${dgRun ? dgRun.e + ' ' + esc(dgRun.n) + ' ・ ' : ''}${S.rgRun.at ? S.rgRun.at.f + 1 : 0}階 ・ ❤${S.rgRun.hp}）</button>
-      <button class="btn" style="width:100%;margin-bottom:10px" data-act="rgabandon">🏳️ この挑戦を放棄して新しく始める</button>`
-      : `${rolePicker()}
-      <div class="diffs">${Object.entries(DIFFS).map(([k, d]) => `<button class="diff ${(S.rgDiffSel || 'normal') === k ? 'on' : ''}" data-act="rgdiff:${k}"><b>${d.e} ${d.n}</b><small>${m.wins_[k] ? `踏破${m.wins_[k]}回` : '未踏破'}</small></button>`).join('')}</div>
-      <div class="ghost" style="text-align:center;margin:-4px 0 10px">${DIFFS[S.rgDiffSel || 'normal'].desc}</div>
-      <div class="asc"><button class="btn" data-act="rgasc:-1">◀</button><div><b>アセンション ${S.rgAscSel ?? asc}</b><div class="ghost">${(S.rgAscSel ?? asc) ? `敵の強さ +${(S.rgAscSel ?? asc) * 8}%` : '通常の難易度'}</div></div><button class="btn" data-act="rgasc:1">▶</button></div>
-      <button class="btn primary big" style="width:100%;margin-bottom:10px" data-act="rgnew">⚔️ 挑戦開始</button>`}
-    <div class="card"><h3>遊び方</h3><div class="howto">
-      <p>🗺️ 分岐マップを1階ずつ登る。⚔️戦闘 👺エリート ❓イベント 🔥休憩 🛒商店 💰宝箱</p>
-      <p>⚡ 毎ターン最初に<b>知識チャージ</b>（1問）。正解で3⚡、<b>★★★確信</b>で正解なら4⚡＋知識1（攻撃力UP）、外すと1⚡</p>
-      <p>👻 敵は「誤解」。倒すと<b>真実が明かされる</b></p>
-      <p>📖 のカードは使うと出題。正解で大きな効果</p>
-      <p>🏆 踏破するとアセンション（高難度）が解放</p></div></div>`;
+  const hero = `<div class="tower-hero" style="--c:${t.color}">
+    <div class="th-e">${heroE()}</div>
+    <div class="th-b"><div class="th-n">${esc(towerName())}</div>
+      <div class="th-d">${DG() && DG().desc ? esc(DG().desc) : `${chs.length < t.chapters.length ? '' : '全'}${qn}問から出題`}</div>
+      <div class="th-boss">頂上：<b>${esc(bossName(t))}</b></div>
+      <div class="tstats"><span>最高 <b>${m.best}</b>階</span><span>踏破 <b>${m.wins}</b></span><span>挑戦 <b>${m.runs}</b></span></div></div>
+    <button class="howbtn" data-act="rghow">❓</button></div>`;
+  const body = cont
+    ? `<div class="contbox"><div class="ghost">挑戦中</div><div class="cont-l">${ROLES[S.rgRun.role || 'scholar'].e} ${dgRun ? dgRun.e + ' ' + esc(dgRun.n) + ' ・ ' : ''}${S.rgRun.at ? S.rgRun.at.f + 1 : 0}階 ・ ❤${S.rgRun.hp}/${S.rgRun.maxHp}</div></div>
+      <button class="btn primary big wide" data-act="rgcont">▶ 続きから</button>
+      <button class="btn wide" data-act="rgabandon">🏳️ 放棄して新しく始める</button>`
+    : `${rolePicker()}
+      <div class="diffrow"><div class="diffs">${Object.entries(DIFFS).map(([k, d]) => `<button class="diff ${(S.rgDiffSel || 'normal') === k ? 'on' : ''}" data-act="rgdiff:${k}">${d.e} ${d.n}${m.wins_[k] ? '<i>👑</i>' : ''}</button>`).join('')}</div>
+        <div class="asc"><button data-act="rgasc:-1">◀</button><b>A${ascSel}</b><button data-act="rgasc:1">▶</button></div></div>
+      <div class="ghost diffdesc">${DIFFS[S.rgDiffSel || 'normal'].desc}${ascSel ? ` ／ アセンション${ascSel}：敵+${ascSel * 8}%` : ''}</div>
+      ${runElsewhere ? `<div class="ghost diffdesc">⚠️ ${runElsewhere.icon}${esc(runElsewhere.title)} で挑戦中のランは、新しく始めると放棄されます</div>` : ''}
+      <button class="btn primary big wide" data-act="rgnew">⚔️ 挑戦開始</button>`;
+  app.innerHTML = `${hud()}${themes}${picker}${hero}${body}`;
 }
 function rgNewRun(tid) {
   const m = rMeta(metaKey(tid, RGD));
@@ -318,7 +322,8 @@ function rgHeader() {
 }
 function renderMap() {
   screen = 'rg-map'; document.body.classList.remove('fever-bg');
-  const t = rTheme(), av = availNodes(), H = 74, top = 40, height = RG_FLOORS * H + top;
+  // 画面の高さに合わせて階の間隔を詰める（スクロールせずに塔全体が見える）
+  const t = rTheme(), av = availNodes(), H = Math.max(40, Math.min(74, Math.floor((innerHeight - 250) / RG_FLOORS))), top = 34, height = RG_FLOORS * H + top;
   const X = c => [18, 50, 82][c], Y = f => (RG_FLOORS - 1 - f) * H + top;
   const isAv = (f, c) => av.some(a => a.f === f && a.c === c);
   const visited = (f, c) => RG.path.some(p => p.f === f && p.c === c);
@@ -338,7 +343,7 @@ function renderMap() {
   }
   app.innerHTML = `<div class="title"><button class="back" data-act="rgback">←</button><h2>${heroE()} ${esc(towerName())} ${RG.at ? RG.at.f + 1 : 0}階</h2></div>
     ${rgHeader()}
-    <div class="tmap" style="height:${height}px"><svg viewBox="0 0 100 ${height}" preserveAspectRatio="none">${lines}</svg>${nodes}
+    <div class="tmap" style="height:${height}px;--nd:${Math.min(48, H - 4)}px"><svg viewBox="0 0 100 ${height}" preserveAspectRatio="none">${lines}</svg>${nodes}
       <div class="boss-label" style="top:${Y(RG_FLOORS - 1) - 36}px">${t.icon} ${esc(bossName(t))}</div></div>
     <div class="legend">${Object.keys(NODE_ICON).map(k => `<span>${NODE_ICON[k]}${NODE_NAME[k]}</span>`).join('')}</div>`;
   const first = $('.mnode.av');
@@ -664,9 +669,9 @@ function gainRelic() {
 }
 function dropEvidence() {
   const t = rTheme(), st = tst(t.id), left = [];
-  dgChapters(t).forEach(ci => t.chapters[ci].facts.forEach((f, fi) => { if (!st.cards[`${ci}-${fi}`]) left.push({ ci, fi, f }); }));
+  dgChapters(t).forEach(ci => t.chapters[ci].facts.forEach((f, fi) => { if (!st.cards[fKey(t, ci, fi)]) left.push({ ci, fi, f }); }));
   if (!left.length) return null;
-  const p = left[rand(left.length)]; st.cards[`${p.ci}-${p.fi}`] = 1; return p;
+  const p = left[rand(left.length)]; st.cards[fKey(t, p.ci, p.fi)] = 1; return p;
 }
 async function winCombat() {
   const kind = CB.kind, f = CB.foe;
@@ -861,11 +866,13 @@ function rogueAct(act, arg, b) {
     case 'rgrolelock': toast('🎰 ガチャの「ロール召喚」で手に入る！'); return true;
     case 'rpull': pullRole(); return true;
     case 'rpullagain': closeModal(b.closest('.modal')); pullRole(); return true;
+    case 'rgtheme': S.rgAscSel = null; save(); rogueEntry(arg); return true;
+    case 'rghow': howModal(); return true;
     case 'rgdiff': S.rgDiffSel = arg; save(); rogueEntry(RGE); return true;
     case 'rgbless': takeBlessing(+arg); return true;
     case 'rgnode': { const [f, c] = arg.split('-').map(Number); enterNode(f, c); return true; }
     case 'rgnoop': return true;
-    case 'rgback': TT = rTheme(); RG = null; rogueEntry(TT.id); return true;
+    case 'rgback': { const tid = RG.tid; RG = null; rogueEntry(tid); return true; }
     case 'rgdeck': if (RG) deckModal(); return true;
     case 'rgrelic': toast(`${rlc(arg).e} ${rlc(arg).n}：${rlc(arg).d}`); return true;
     case 'rgplay': playCard(+arg); return true;
@@ -897,14 +904,23 @@ function rogueKey(e) {
 // ============================================================
 function rolePicker() {
   const own = myRoles(), sel = own[S.rgRoleSel] != null ? S.rgRoleSel : 'scholar', R = ROLES[sel], rl = RRELICS[R.relic];
+  const missing = Object.keys(ROLES).some(id => own[id] == null);
   return `<div class="roles">${Object.entries(ROLES).map(([id, r]) => {
     const has = own[id] != null;
     return `<button class="role ${sel === id ? 'on' : ''} ${has ? '' : 'locked'}" data-act="${has ? 'rgrole:' + id : 'rgrolelock'}">
-      <div class="re">${has ? r.e : '❔'}</div><div class="rn">${has ? esc(r.n) : '？？？'}</div>
-      <span class="rar ${r.rar}">${r.rar}</span>${has && own[id] ? `<small>${'★'.repeat(own[id])}</small>` : ''}</button>`;
+      <span class="re">${has ? r.e : '❔'}</span><span class="rn">${has ? esc(r.n) : r.rar}</span>${has && own[id] ? `<i>${'★'.repeat(own[id])}</i>` : ''}</button>`;
   }).join('')}</div>
-    <div class="roledesc"><b>${R.e} ${esc(R.n)}</b>　❤️${R.hp + 3 * (own[sel] || 0)}　${rl.e} ${esc(rl.n)}：${esc(rl.d)}<br><span class="ghost">${esc(R.desc)}</span>
-      ${Object.keys(ROLES).some(id => own[id] == null) ? `<button class="btn" style="width:100%;margin-top:8px" data-act="gacha">🎰 ロール召喚で仲間を増やす</button>` : ''}</div>`;
+    <div class="roledesc"><b>${R.e} ${esc(R.n)}</b> ❤️${R.hp + 3 * (own[sel] || 0)} ・ ${rl.e}${esc(rl.n)}：${esc(rl.d)}<br><span class="ghost">${esc(R.desc)}</span>${missing ? ` <button class="linkbtn" data-act="gotab:gacha">🎰仲間を増やす</button>` : ''}</div>`;
+}
+function howModal() {
+  modal(`<h2>⚔️ 知の塔の遊び方</h2><div class="howto" style="text-align:left">
+    <p>🗺️ 分岐マップを1階ずつ登る。⚔️戦闘 👺エリート ❓イベント 🔥休憩 🛒商店 💰宝箱</p>
+    <p>⚡ 毎ターン最初に<b>知識チャージ</b>（1問）。正解で3⚡、<b>★★★確信</b>で正解なら4⚡＋知識1（攻撃力UP）、外すと1⚡</p>
+    <p>👻 敵は「誤解」。倒すと<b>真実が明かされる</b></p>
+    <p>📖 のカードは使うと出題。正解で大きな効果</p>
+    <p>🎭 ロールごとにカードがまったく違う。ガチャで仲間を増やそう</p>
+    <p>🏆 踏破するとアセンション（高難度）が解放</p></div>
+    <button class="btn primary wide" data-act="close">OK</button>`);
 }
 const roleCost = () => Object.keys(myRoles()).length <= 1 ? ROLE_COST / 2 : ROLE_COST;
 function roleBanner() {
