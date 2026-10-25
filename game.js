@@ -22,7 +22,7 @@ const RARITY_BONUS = { N: 1, R: 2, SR: 4, SSR: 8 }; // 図鑑ボーナス(XP%)
 const KEY = 'nouRush.v1';
 function fresh() {
   return {
-    v: 2, xp: 0, level: 1, coins: 100, streak: 0, lastPlay: null, best: {}, srs: {}, mon: {}, pity: 0, daily: null,
+    v: SAVE_VERSION, xp: 0, level: 1, coins: 100, streak: 0, lastPlay: null, best: {}, srs: {}, mon: {}, pity: 0, daily: null,
     stats: { plays: 0, correct: 0, answered: 0, maxCombo: 0, pulls: 0 }, sound: true, seenUnlock: 1,
   };
 }
@@ -31,7 +31,7 @@ function fresh() {
 // ・新しく増えた項目は既定値で補う（深いマージ）
 // ・読めないデータは上書きせず退避し、自動バックアップから復元する
 // ・1日1回スナップショットを自動で残す（最新5日分）
-const SAVE_VERSION = 2, BAK = KEY + '.bak.', BAK_KEEP = 5;
+const SAVE_VERSION = 3, BAK = KEY + '.bak.', BAK_KEEP = 5;
 const isObj = o => o && typeof o === 'object' && !Array.isArray(o);
 function deepFill(dst, def) {
   for (const k in def) { if (dst[k] === undefined) dst[k] = def[k]; else if (isObj(dst[k]) && isObj(def[k])) deepFill(dst[k], def[k]); }
@@ -55,6 +55,14 @@ function migrate(s, v = s.v || 1) {
       });
       st.cards = cards;
     });
+  }
+  if (v === 2) {
+    // 問題のキーを「問題文」から「問題文＋答え」へ。同じ問題文の問題には同じ記録を引き継ぐ
+    const byOld = {};
+    THEMES.forEach(t => t.chapters.forEach((c, ci) => c.questions.forEach((q, qi) => { (byOld[qKeyV2(t, ci, qi)] = byOld[qKeyV2(t, ci, qi)] || []).push(qKey(t, ci, qi)); })));
+    const tsrs = {};
+    Object.entries(s.tsrs || {}).forEach(([k, val]) => { if (byOld[k]) byOld[k].forEach(nk => { tsrs[nk] = { ...val }; }); else tsrs[k] = val; });
+    s.tsrs = tsrs;
   }
   s.v = SAVE_VERSION;
   return s;
