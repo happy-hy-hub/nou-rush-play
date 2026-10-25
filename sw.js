@@ -1,6 +1,6 @@
 // オフライン用 Service Worker（PWA として HTTPS 配信したとき用。iOS アプリ版では使われない）
 // VERSION と ASSETS は npm run build（tools/build-www.js）が書き込む
-const VERSION = 'nr-74ceef1368';
+const VERSION = 'nr-fb267adcd4';
 const ASSETS = ["./","./app.css","./app.js","./data.js","./design.css","./game.js","./icons/apple-touch-icon.png","./icons/icon-1024.png","./icons/icon-192.png","./icons/icon-512.png","./index.html","./manifest.webmanifest","./quiz.js","./rogue.css","./rogue.js","./roles.js","./style.css","./theme.css","./theme.js","./themes/aws.js","./themes/murakami.js","./themes/pyramid.js","./themes/uogotoba.js"];
 
 // インストール時に全ファイルを保存 → 初回に開いた後はオフラインで全テーマ遊べる

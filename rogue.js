@@ -176,8 +176,9 @@ let RG = null, CB = null;
 // 難易度（アセンションとは別に選べる）
 const DIFFS = {
   normal: { n: 'ふつう', e: '🙂', hpMul: 1, atkMul: 1, eliteBoost: 0, missE: 2, qTime: 0, restHeal: .3, startHp: 0, curse: 0, boss2: false, score: 1, desc: '標準の難易度' },
-  hard: { n: 'むずかしい', e: '😤', hpMul: 1.25, atkMul: 1.15, eliteBoost: .04, missE: 1, qTime: 0, restHeal: .3, startHp: 0, curse: 0, boss2: false, score: 1.5, desc: '敵HP+25%・攻撃+15%（上の階ほど） ／ ★★を外すと1⚡ ／ エリート少し増' },
-  oni: { n: '鬼', e: '👹', hpMul: 1.35, atkMul: 1.18, eliteBoost: .05, missE: 1, qTime: 0, restHeal: .25, startHp: 0, curse: 1, boss2: true, score: 2.5, desc: '敵HP+35%・攻撃+18%（上の階ほど） ／ 呪い入りデッキ ／ 休憩の回復減 ／ 最後のボスに第2形態' },
+  // betLoss：★★★を外したときに知識（攻撃力）がこの戦闘中だけ下がる量。★★の外しも1⚡になる難易度で、賭けのリスクを残すため
+  hard: { n: 'むずかしい', e: '😤', hpMul: 1.25, atkMul: 1.15, eliteBoost: .04, missE: 1, betLoss: 1, qTime: 0, restHeal: .3, startHp: 0, curse: 0, boss2: false, score: 1.5, desc: '敵HP+25%・攻撃+15%（上の階ほど） ／ ★★を外すと1⚡・★★★を外すと知識-1 ／ エリート少し増' },
+  oni: { n: '鬼', e: '👹', hpMul: 1.35, atkMul: 1.18, eliteBoost: .05, missE: 1, betLoss: 1, qTime: 0, restHeal: .25, startHp: 0, curse: 1, boss2: true, score: 2.5, desc: '敵HP+35%・攻撃+18%（上の階ほど） ／ ★★★を外すと知識-1 ／ 呪い入りデッキ ／ 休憩の回復減 ／ 最後のボスに第2形態' },
 };
 const DIFF = () => DIFFS[(RG && RG.diff) || 'normal'];
 // テーマごとの世界観（名前と絵文字だけ差し替える。効果は共通）
@@ -403,7 +404,7 @@ function ask(item, opt = {}) {
     const q = item.q, ov = document.createElement('div');
     ov.className = 'qov';
     const st = { conf: 2, done: false };
-    const bet = opt.bet ? `<div class="confs two">${[2, 3].map(n => `<button class="conf c${n} ${n === 2 ? 'on' : ''}" data-q="cf:${n}">${n === 2 ? `★★ 普通<small>正解3⚡ ／ 外${DIFF().missE}⚡</small>` : `★★★ 確信<small>正解4⚡+知識1 ／ 外1⚡</small>`}</button>`).join('')}</div>` : '';
+    const bet = opt.bet ? `<div class="confs two">${[2, 3].map(n => `<button class="conf c${n} ${n === 2 ? 'on' : ''}" data-q="cf:${n}">${n === 2 ? `★★ 普通<small>正解3⚡ ／ 外${DIFF().missE}⚡</small>` : `★★★ 確信<small>正解4⚡+知識1 ／ 外1⚡${DIFF().betLoss ? `・知識-${DIFF().betLoss}` : ''}</small>`}</button>`).join('')}</div>` : '';
     const lim = DIFF().qTime;
     ov.innerHTML = `<div class="qin"><div class="qtitle">${esc(opt.title || '📖 出題')}</div>
       <div class="qbox tq"><div class="ask">${TYPE_LABEL[q.type]}</div><div class="q ${q.q.length > 28 ? 'long' : ''}">${qText(q)}</div>
@@ -570,6 +571,9 @@ async function startTurn() {
   let e = r.ok ? (r.conf === 3 ? 4 : 3) : r.near ? 3 : (r.conf === 3 ? 1 : DIFF().missE);
   if (!r.ok && hasR('feather')) e = Math.max(e, 2);
   if (!r.ok && r.conf === 3) { if (hasR('coin')) e = Math.max(e, 2); if (CB.powers.luck) e = Math.max(e, CB.powers.luck); }
+  // むずかしい・鬼：★★★を外すと知識が下がる（惜しいは対象外）
+  const betLoss = !r.ok && !r.near && r.conf === 3 ? DIFF().betLoss || 0 : 0;
+  if (betLoss) CB.str -= betLoss;
   if (r.ok && r.conf === 3) { CB.str += hasR('tablet') ? 2 : 1; if (hasR('flame')) e++; }
   if (CB.turn === 1 && hasR('lamp')) e++;
   if (r.ok) { if (hasR('scroll')) drawCards(1); if (CB.powers.curio) CB.block += CB.powers.curio; }
@@ -577,7 +581,7 @@ async function startTurn() {
   e += ['crown', 'sozu', 'velvet', 'mark'].filter(hasR).length;
   CB.energy = e; CB.busy = false;
   renderCombat();
-  const en = $('.energy'); if (en) { en.classList.add('charge'); const rc = en.getBoundingClientRect(); floatText(`+${e}⚡${r.ok && r.conf === 3 ? ' 💪+1' : ''}`, rc.left + rc.width / 2, rc.top, '#ffcc33', 24); }
+  const en = $('.energy'); if (en) { en.classList.add('charge'); const rc = en.getBoundingClientRect(); floatText(`+${e}⚡${r.ok && r.conf === 3 ? ` 💪+${hasR('tablet') ? 2 : 1}` : betLoss ? ` 💪-${betLoss}` : ''}`, rc.left + rc.width / 2, rc.top, betLoss ? '#ff5c7a' : '#ffcc33', 24); }
 }
 async function playCard(i) {
   if (!CB || CB.busy) return;
