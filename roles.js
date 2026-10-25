@@ -34,13 +34,27 @@ const ROLE_OF = {
 Object.entries(ROLE_OF).forEach(([role, ids]) => ids.split(' ').forEach(id => { CARDS[id].role = role; }));
 CARDS.sacrifice.f = async u => { loseHP(3); CB.energy += 2; if (u) drawCards(1); renderCombat(); };
 CARDS.shiv.f = async u => { await hit(4 + 2 * u + (CB.powers.accuracy || 0)); };
+// 瞑想：以前は「捨札の📖カード」だけを対象にしていて、捨札に無いと何も起きなかった。
+// 山札・捨札の両方から探し、見つからなければ代わりにドローする
+CARDS.meditate.d = u => `📖カードを山札・捨札から${2 + u}枚手札へ（無ければ2ドロー）${u ? ' +1⚡' : ''}（廃棄）`;
+CARDS.meditate.f = async u => {
+  const want = 2 + u, got = [];
+  for (const pile of ['discard', 'draw']) {
+    for (let i = CB[pile].length - 1; i >= 0 && got.length < want; i--) if (CARDS[CB[pile][i].id].q) got.push(CB[pile].splice(i, 1)[0]);
+  }
+  const room = 10 - CB.hand.length;
+  CB.hand.push(...got.slice(0, room)); CB.discard.push(...got.slice(room));
+  if (got.length) pfloat(`🧘 📖×${got.length}`); else { drawCards(2); pfloat('🧘 2ドロー'); }
+  if (u) CB.energy++;
+  renderCombat();
+};
 
 Object.assign(CARDS, {
   // ===== 基本カード（ロールごとの打撃・防御） =====
   g_strike: { e: '⚔️', n: '斬撃', c: 1, t: 'atk', r: 0, role: 'gladiator', d: u => `${6 + 3 * u}ダメージ`, f: async u => { await hit(6 + 3 * u); } },
   g_defend: { e: '🤺', n: '受け流し', c: 1, t: 'skl', r: 0, role: 'gladiator', d: u => `ブロック${5 + 3 * u}`, f: async u => gainBlock(5 + 3 * u) },
   k_strike: { e: '🔨', n: '突き', c: 1, t: 'atk', r: 0, role: 'guardian', d: u => `${6 + 3 * u}ダメージ`, f: async u => { await hit(6 + 3 * u); } },
-  k_defend: { e: '🛡️', n: '構え', c: 1, t: 'skl', r: 0, role: 'guardian', d: u => `ブロック${6 + 3 * u}`, f: async u => gainBlock(6 + 3 * u) },
+  k_defend: { e: '🛡️', n: '構え', c: 1, t: 'skl', r: 0, role: 'guardian', d: u => `ブロック${5 + 3 * u}`, f: async u => gainBlock(5 + 3 * u) },
   a_strike: { e: '🗡️', n: '刺突', c: 1, t: 'atk', r: 0, role: 'assassin', d: u => `${6 + 3 * u}ダメージ`, f: async u => { await hit(6 + 3 * u); } },
   a_defend: { e: '💨', n: '回避', c: 1, t: 'skl', r: 0, role: 'assassin', d: u => `ブロック${5 + 3 * u}`, f: async u => gainBlock(5 + 3 * u) },
   s_strike: { e: '✋', n: '掌打', c: 1, t: 'atk', r: 0, role: 'sage', d: u => `${6 + 3 * u}ダメージ`, f: async u => { await hit(6 + 3 * u); } },
@@ -61,7 +75,7 @@ Object.assign(CARDS, {
   impervious: { e: '🏯', n: '鉄壁の守り', c: 2, t: 'skl', r: 3, ex: 1, role: 'guardian', d: u => `ブロック${30 + 10 * u}（廃棄）`, f: async u => gainBlock(30 + 10 * u) },
   spikes: { e: '🦔', n: '棘の鎧', c: 2, t: 'skl', r: 2, role: 'guardian', d: u => `ブロック${10 + 3 * u} 反撃+3`, f: async u => { gainBlock(10 + 3 * u); CB.powers.thorns = (CB.powers.thorns || 0) + 3; } },
   brace: { e: '🧍', n: '踏ん張り', c: 0, t: 'skl', r: 1, role: 'guardian', d: u => `ブロック${4 + 3 * u}`, f: async u => gainBlock(4 + 3 * u) },
-  juggernaut: { e: '🦏', n: '重装突撃', c: 2, t: 'pow', r: 3, role: 'guardian', d: u => `ブロックを得るたび敵に${5 + 2 * u}ダメ`, f: async u => { CB.powers.jugg = (CB.powers.jugg || 0) + 5 + 2 * u; } },
+  juggernaut: { e: '🦏', n: '重装突撃', c: 2, t: 'pow', r: 3, role: 'guardian', d: u => `ブロックを得るたび敵に${4 + 2 * u}ダメ`, f: async u => { CB.powers.jugg = (CB.powers.jugg || 0) + 4 + 2 * u; } },
   reinforce: { e: '🔩', n: '補強', c: 1, t: 'skl', r: 1, role: 'guardian', d: u => `ブロック${5 + 2 * u} 次ターンも${5 + 2 * u}`, f: async u => { gainBlock(5 + 2 * u); CB.nextBlock += 5 + 2 * u; } },
 
   // ===== 🗡️ 毒使い：毒・投げナイフ・敏捷 =====
@@ -76,7 +90,7 @@ Object.assign(CARDS, {
 
   // ===== 🔮 賢者：構え（静思で溜め、憤怒で倍撃）と📖 =====
   eruption: { e: '🌋', n: '噴出', c: [2, 1], t: 'atk', r: 1, role: 'sage', d: () => `9ダメージ 憤怒へ`, f: async () => { await hit(9); setStance('wrath'); } },
-  vigil: { e: '🕯️', n: '静観', c: 1, t: 'skl', r: 1, role: 'sage', d: u => `ブロック${8 + 4 * u} 静思へ`, f: async u => { gainBlock(8 + 4 * u); setStance('calm'); } },
+  vigil: { e: '🕯️', n: '静観', c: 1, t: 'skl', r: 1, role: 'sage', d: u => `ブロック${10 + 4 * u} 静思へ`, f: async u => { gainBlock(10 + 4 * u); setStance('calm'); } },
   tantrum: { e: '😤', n: '激昂', c: 1, t: 'atk', r: 1, role: 'sage', d: u => `${3 + u}ダメ×3 憤怒へ`, f: async u => { for (let k = 0; k < 3; k++) await hit(3 + u); setStance('wrath'); } },
   innerpeace: { e: '☮️', n: '内なる平穏', c: 1, t: 'skl', r: 2, role: 'sage', d: u => `静思なら${3 + u}ドロー／でなければ静思へ`, f: async u => { if (CB.stance === 'calm') { drawCards(3 + u); renderCombat(); } else setStance('calm'); } },
   flurry: { e: '🌀', n: '疾風打', c: 0, t: 'atk', r: 1, role: 'sage', d: u => `${4 + 2 * u}ダメージ`, f: async u => { await hit(4 + 2 * u); } },

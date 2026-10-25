@@ -175,12 +175,14 @@ const sfx = {
 // ---------- 演出 ----------
 const fx = $('#fx');
 function floatText(txt, x, y, color = '#ffcc33', size = 22) {
+  if (window.SIM) return;
   const d = document.createElement('div');
   d.className = 'float'; d.textContent = txt;
   d.style.cssText = `left:${x}px;top:${y}px;color:${color};font-size:${size}px;transform:translateX(-50%)`;
-  fx.appendChild(d); setTimeout(() => d.remove(), 900);
+  fx.appendChild(d); d.addEventListener('animationend', () => d.remove()); setTimeout(() => d.remove(), 1200);
 }
 function burst(x, y, n = 14, colors = ['#ffcc33', '#2ee59d', '#5ad1ff', '#ff5c7a', '#b18cff']) {
+  if (window.SIM) return;
   for (let i = 0; i < n; i++) {
     const p = document.createElement('div'); p.className = 'particle';
     p.style.left = x + 'px'; p.style.top = y + 'px'; p.style.background = colors[rand(colors.length)];

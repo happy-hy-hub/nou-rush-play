@@ -22,7 +22,10 @@ function tabBadge(id) {
   if (id === 'explore' && typeof dueKeys === 'function') { const n = dueKeys().length; if (n) return `<i class="num">${n > 99 ? '99+' : n}</i>`; }
   return '';
 }
+// 画面ごとの世界観（design.css が body[data-zone] で背景や部品の見た目を切り替える）
+const zoneOf = sc => sc.startsWith('rg') ? 'tower' : /^(explore|tmap|tev|tstory|trun|tresult|tfinale|trelic)$/.test(sc) ? 'explore' : /^(gacha|dex)$/.test(sc) ? 'gacha' : 'more';
 function drawTabbar() {
+  document.body.dataset.zone = zoneOf(screen);
   const cur = TAB_OF[screen];
   document.body.classList.toggle('has-tabs', !!cur);
   tabbar.hidden = !cur;

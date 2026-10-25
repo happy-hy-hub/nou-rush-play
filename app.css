@@ -133,3 +133,6 @@ body.has-tabs #toast{bottom:calc(84px + env(safe-area-inset-bottom))}
 .node .ni{width:32px;height:32px;font-size:19px}
 .tower-btn{padding:8px}
 .mystery .bar{height:6px}
+/* トースト：位置をずらすだけだとタブの上に残って見えることがあったので、透明にして隠す */
+#toast{opacity:0;visibility:hidden;pointer-events:none;transition:transform .3s cubic-bezier(.2,1.4,.4,1),opacity .2s,visibility 0s .3s}
+#toast.show{opacity:1;visibility:visible;transition:transform .3s cubic-bezier(.2,1.4,.4,1),opacity .2s}

@@ -7,8 +7,13 @@
 //  ・敵は「誤解」。倒すと真実が明かされる（論破）
 // ============================================================
 
-const RG_FLOORS = 12, RG_HAND = 5, RG_HP = 60, RG_MAX_ASC = 10;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 1層 = 12階 + ボス。2層構成（1層目のボスを倒すとボス遺物を選んで2層目へ）
+const RG_FLOORS = 13, RG_ACTS = 2, RG_HAND = 5, RG_HP = 60, RG_MAX_ASC = 10;
+// window.SIM = true で演出の待ち時間を0にする（バランス調整の自動プレイ用）
+const sleep = ms => window.SIM ? Promise.resolve() : new Promise(r => setTimeout(r, ms));
+const actOf = () => (RG && RG.act) || 0;
+const lastAct = () => actOf() >= RG_ACTS - 1;
+const gFloor = f => actOf() * RG_FLOORS + f + 1; // 通算の階（1始まり）
 
 // ---------- カード ----------
 // t: atk / skl / pow / curse,  r: 0=初期 1=コモン 2=アンコモン 3=レア,  q: 出題あり,  ex: 廃棄
@@ -101,9 +106,9 @@ const basic = (s, d) => [...Array(s).fill('strike'), ...Array(d).fill('defend')]
 const ROLES = {
   scholar: { n: '学徒', e: '🎓', rar: 'N', hp: 60, relic: 'notebook', deck: STARTER, desc: 'バランス型。知識チャージで着実に強くなる' },
   gladiator: { n: '剣闘士', e: '⚔️', rar: 'R', hp: 75, relic: 'blood', deck: [...basic(5, 4), 'bash'], desc: '高HPと重い一撃。戦闘後に回復し、力押しで登る' },
-  guardian: { n: '守護者', e: '🛡️', rar: 'R', hp: 80, relic: 'bulwark', deck: [...basic(4, 5), 'slam'], desc: '鉄壁の防御。積み上げたブロックを攻撃に変える' },
+  guardian: { n: '守護者', e: '🛡️', rar: 'R', hp: 70, relic: 'bulwark', deck: [...basic(4, 5), 'slam'], desc: '鉄壁の防御。積み上げたブロックを攻撃に変える' },
   assassin: { n: '毒使い', e: '🗡️', rar: 'SR', hp: 62, relic: 'ring', deck: [...basic(4, 4), 'toxin', 'blades'], desc: '毒と投げナイフ。手数で削り切る' },
-  sage: { n: '賢者', e: '🔮', rar: 'SR', hp: 56, relic: 'tablet', deck: [...basic(4, 4), 'insight', 'oracle'], desc: '📖出題カードの達人。正解するほど手が付けられなくなる' },
+  sage: { n: '賢者', e: '🔮', rar: 'SR', hp: 62, relic: 'tablet', deck: [...basic(4, 4), 'insight', 'oracle'], desc: '📖出題カードの達人。正解するほど手が付けられなくなる' },
   jester: { n: '道化師', e: '🃏', rar: 'SSR', hp: 60, relic: 'coin', deck: [...basic(4, 4), 'dice', 'jackpot'], desc: '運と度胸。一か八かの大勝負で戦う' },
 };
 const ROLE_COST = 300, ROLE_PITY = 10, ROLE_MAX_RANK = 5;
@@ -124,10 +129,18 @@ const RRELICS = {
   idol: { e: '🏆', n: '黄金の像', d: '戦闘のゴールド+50%' },
   book: { e: '📕', n: '百科事典', d: 'カード報酬の選択肢+1' },
   hourglass: { e: '⏳', n: '砂時計', d: '3ターン目から毎ターン開始時ブロック4' },
+  // ボス遺物（1層目のボス撃破時に3択。ランダム入手しない）
+  crown: { e: '👑', n: '知恵の王冠', d: '毎ターン+1⚡ ／ カード報酬の選択肢-1', boss: 1 },
+  sozu: { e: '⚱️', n: '封印の壺', d: '毎ターン+1⚡ ／ 休憩所で回復できない', boss: 1 },
+  velvet: { e: '📿', n: '天鵞絨の首飾り', d: '毎ターン+1⚡ ／ 1ターンに6枚までしか使えない', boss: 1 },
+  mark: { e: '🩻', n: '痛みの刻印', d: '毎ターン+1⚡ ／ 戦闘開始時、山札に混乱2枚', boss: 1 },
+  astrolabe: { e: '🔭', n: '星見の器', d: '毎ターン+1ドロー', boss: 1 },
+  runic: { e: '🔺', n: 'ルーンの角錐', d: 'ターン終了時に手札を捨てない', boss: 1 },
+  ginseng: { e: '🌿', n: '生命の霊薬', d: '最大HP+20・全回復', boss: 1, on: () => { RG.maxHp += 20; RG.hp = RG.maxHp; } },
   // ロールの初期遺物（ランダム入手しない）
   notebook: { e: '📓', n: '学徒の手帳', d: '1ターン目+1ドロー', starter: 1 },
   blood: { e: '🩸', n: '闘士の血', d: '戦闘終了時HP6回復', starter: 1 },
-  bulwark: { e: '🏰', n: '守護の紋章', d: '戦闘開始時ブロック12', starter: 1 },
+  bulwark: { e: '🏰', n: '守護の紋章', d: '戦闘開始時ブロック8', starter: 1 },
   ring: { e: '💍', n: '毒蛇の指輪', d: '戦闘開始時 敵に毒4・1ターン目+2ドロー', starter: 1 },
   tablet: { e: '🪧', n: '賢者の石板', d: '★★★正解で知識+2 ／ 📖カード正解で1ドロー', starter: 1 },
   coin: { e: '🪙', n: '幸運のコイン', d: '★★★を外しても2⚡ ／ 戦闘のゴールド+20%', starter: 1 },
@@ -149,6 +162,9 @@ const ELITES = {
   dragon: { n: '混沌の竜', e: '🐲', hp: 66, moves: [{ atk: 16 }, { block: 14, weak: 2 }, { atk: 5, times: 3, vuln: 1 }] },
   mummy: { n: '俗説のミイラ', e: '🧟', hp: 54, moves: [{ atk: 9, weak: 2 }, { atk: 16 }, { str: 2, block: 10 }] },
 };
+// 1層目のボス（門番）
+const HP_PER_FLOOR = .04, ATK_PER_FLOOR = .02;
+const GATE = { e: '🚪', hp: 105, cycle: true, moves: [{ atk: 7, times: 2 }, { block: 12, str: 1 }, { atk: 17 }, { weak: 1, vuln: 1, atk: 5 }] };
 const BOSS = { e: '🗿', hp: 140, cycle: true, moves: [{ atk: 8, times: 2 }, { block: 16, str: 2 }, { atk: 22 }, { weak: 2, vuln: 2, atk: 6 }] };
 
 // ---------- イベント ----------
@@ -160,8 +176,8 @@ let RG = null, CB = null;
 // 難易度（アセンションとは別に選べる）
 const DIFFS = {
   normal: { n: 'ふつう', e: '🙂', hpMul: 1, atkMul: 1, eliteBoost: 0, missE: 2, qTime: 0, restHeal: .3, startHp: 0, curse: 0, boss2: false, score: 1, desc: '標準の難易度' },
-  hard: { n: 'むずかしい', e: '😤', hpMul: 1.3, atkMul: 1.2, eliteBoost: .08, missE: 1, qTime: 0, restHeal: .25, startHp: -5, curse: 0, boss2: false, score: 1.5, desc: '敵HP+30%・攻撃+20% ／ ★★を外すと1⚡ ／ エリート増' },
-  oni: { n: '鬼', e: '👹', hpMul: 1.5, atkMul: 1.3, eliteBoost: .15, missE: 1, qTime: 0, restHeal: .2, startHp: -10, curse: 1, boss2: true, score: 2.5, desc: '敵HP+50%・攻撃+30% ／ 呪い入りデッキ ／ ボスに第2形態' },
+  hard: { n: 'むずかしい', e: '😤', hpMul: 1.25, atkMul: 1.15, eliteBoost: .04, missE: 1, qTime: 0, restHeal: .3, startHp: 0, curse: 0, boss2: false, score: 1.5, desc: '敵HP+25%・攻撃+15%（上の階ほど） ／ ★★を外すと1⚡ ／ エリート少し増' },
+  oni: { n: '鬼', e: '👹', hpMul: 1.35, atkMul: 1.18, eliteBoost: .05, missE: 1, qTime: 0, restHeal: .25, startHp: 0, curse: 1, boss2: true, score: 2.5, desc: '敵HP+35%・攻撃+18%（上の階ほど） ／ 呪い入りデッキ ／ 休憩の回復減 ／ 最後のボスに第2形態' },
 };
 const DIFF = () => DIFFS[(RG && RG.diff) || 'normal'];
 // テーマごとの世界観（名前と絵文字だけ差し替える。効果は共通）
@@ -242,17 +258,18 @@ function rgNewRun(tid) {
   const rid = myRoles()[S.rgRoleSel] != null ? S.rgRoleSel : 'scholar', role = ROLES[rid];
   RG.role = rid; RG.deck = role.deck.map(id => ({ id, u: 0 })); RG.relics = [role.relic];
   RG.hp = RG.maxHp = role.hp + 3 * (myRoles()[rid] || 0) + DIFF().startHp - (asc >= 5 ? 5 : 0);
-  for (let k = 0; k < DIFF().curse; k++) RG.deck.push({ id: 'doubt', u: 0 });
+  for (let k = 0; k < DIFF().curse; k++) RG.deck.push({ id: 'confuse', u: 0 });
   m.runs++; saveRun();
   renderBlessing();
 }
+const MID_F = Math.floor((RG_FLOORS - 1) / 2), REST_F = RG_FLOORS - 2;
 function genMap(boost = 0) {
   const map = [];
   for (let f = 0; f < RG_FLOORS - 1; f++) {
     const row = [];
     for (let c = 0; c < 3; c++) row.push({ t: nodeType(f, boost), n: [] });
     // 同じ階で全部同じ種類にならないように
-    if (f > 0 && f !== 5 && f !== 10 && row.every(x => x.t === row[0].t)) row[1].t = 'fight';
+    if (f > 0 && f !== MID_F && f !== REST_F && row.every(x => x.t === row[0].t)) row[1].t = 'fight';
     map.push(row);
   }
   for (let f = 0; f < RG_FLOORS - 2; f++) {
@@ -266,8 +283,8 @@ function genMap(boost = 0) {
 }
 function nodeType(f, boost = 0) {
   if (f === 0) return 'fight';
-  if (f === 5) return 'chest';
-  if (f === 10) return 'rest';
+  if (f === MID_F) return 'chest';
+  if (f === REST_F) return 'rest';
   const r = Math.random();
   if (f >= 3 && r < .14 + boost) return 'elite';
   if (r < .38) return 'event';
@@ -341,7 +358,7 @@ function renderMap() {
     const n = nodeAt(f, c), a = isAv(f, c), v = visited(f, c);
     nodes += `<button class="mnode ${n.t} ${a ? 'av' : ''} ${v ? 'vis' : ''}" style="left:${X(c)}%;top:${Y(f)}px" data-act="${a ? `rgnode:${f}-${c}` : 'rgnoop'}" title="${NODE_NAME[n.t]}">${NODE_ICON[n.t]}</button>`;
   }
-  app.innerHTML = `<div class="title"><button class="back" data-act="rgback">←</button><h2>${heroE()} ${esc(towerName())} ${RG.at ? RG.at.f + 1 : 0}階</h2></div>
+  app.innerHTML = `<div class="title"><button class="back" data-act="rgback">←</button><h2>${heroE()} ${esc(towerName())} <small class="actl">第${actOf() + 1}層</small> ${RG.at ? gFloor(RG.at.f) : actOf() * RG_FLOORS}階</h2></div>
     ${rgHeader()}
     <div class="tmap" style="height:${height}px;--nd:${Math.min(48, H - 4)}px"><svg viewBox="0 0 100 ${height}" preserveAspectRatio="none">${lines}</svg>${nodes}
       <div class="boss-label" style="top:${Y(RG_FLOORS - 1) - 36}px">${t.icon} ${esc(bossName(t))}</div></div>
@@ -362,7 +379,7 @@ function enterNode(f, c) {
 }
 function completeNode() {
   RG.path.push(RG.cur); RG.at = RG.cur; RG.cur = null;
-  const m = rMeta(metaKey(RG.tid, RG.dg)); m.best = Math.max(m.best, RG.at.f + 1);
+  const m = rMeta(metaKey(RG.tid, RG.dg)); m.best = Math.max(m.best, gFloor(RG.at.f));
   saveRun(); renderMap();
 }
 
@@ -458,7 +475,7 @@ function startCombat(kind) {
   const t = rTheme(), f = RG.cur.f;
   let base, claim = null;
   const sk = SK();
-  if (kind === 'boss') base = { ...BOSS, n: bossName(t), e: bossE() };
+  if (kind === 'boss') base = lastAct() ? { ...BOSS, n: bossName(t), e: bossE() } : { ...GATE, n: `${towerName()}の門番` };
   else {
     const pool = kind === 'elite' ? ELITES : FOES, skin = kind === 'elite' ? sk.elites : sk.foes;
     if (skin && skin.length) { const x = skin[rand(skin.length)]; base = { ...(pool[x.base] || pool[Object.keys(pool)[0]]), n: x.n, e: x.e }; }
@@ -466,11 +483,13 @@ function startCombat(kind) {
     claim = falseClaim();
   }
   // ボスは階層補正なし（基礎値そのもの）。通常敵は上の階ほど強い
-  const fl = kind === 'boss' ? 0 : f, asc = 1 + 0.08 * RG.asc, D = DIFF();
-  const hp = Math.round(base.hp * (1 + 0.05 * fl) * asc * D.hpMul * (0.95 + Math.random() * 0.1));
+  const fl = kind === 'boss' ? 0 : gFloor(f) - 1, asc = 1 + 0.08 * RG.asc, D = DIFF();
+  // 難易度の上乗せは序盤は控えめ（4割）→ 2層目に入るころ満額。1層目の門番は7割、最後のボスも7割（鬼は第2形態があるため）
+  const ramp = kind === 'boss' ? (lastAct() ? .7 : .7) : .4 + .6 * Math.min(1, fl / RG_FLOORS), dHp = 1 + (D.hpMul - 1) * ramp, dAtk = 1 + (D.atkMul - 1) * ramp;
+  const hp = Math.round(base.hp * (1 + HP_PER_FLOOR * fl) * asc * dHp * (0.95 + Math.random() * 0.1));
   CB = {
-    kind, foe: { ...base, hp, maxHp: hp, block: 0, str: 0, weak: 0, vuln: 0, poison: 0, mi: -1, claim, atkMul: (1 + 0.025 * fl) * asc * D.atkMul },
-    draw: shuffle(RG.deck.map((c, i) => ({ ...c, uid: i }))), hand: [], discard: [], exhaust: [],
+    kind, foe: { ...base, hp, maxHp: hp, block: 0, str: 0, weak: 0, vuln: 0, poison: 0, mi: -1, claim, atkMul: (1 + ATK_PER_FLOOR * fl) * asc * dAtk },
+    draw: shuffle([...RG.deck, ...(hasR('mark') ? [{ id: 'confuse', u: 0 }, { id: 'confuse', u: 0 }] : [])].map((c, i) => ({ ...c, uid: i }))), hand: [], discard: [], exhaust: [],
     energy: 0, block: 0, str: 0, weak: 0, vuln: 0, powers: {}, turn: 0, busy: true, lastOk: false, played: 0, correctCount: 0, tmp: { rage: 0, flex: 0 }, dex: 0, chips: 0, stance: null, nextBlock: 0,
   };
   if (hasR('scale')) CB.str++;
@@ -479,7 +498,7 @@ function startCombat(kind) {
   screen = 'rg-combat';
   renderCombat();
   if (kind !== 'fight') { sfx.fever(); toast(kind === 'boss' ? `🗿 ${base.n} が立ちはだかる！` : `👺 エリート：${base.n}`); }
-  setTimeout(startTurn, 500);
+  if (window.SIM) Promise.resolve().then(startTurn); else setTimeout(startTurn, 500);
 }
 function nextIntent() {
   const f = CB.foe, n = f.moves.length;
@@ -503,7 +522,7 @@ function cardHTML(c, i, playable) {
     ${d.ex ? '<span class="cx">廃棄</span>' : ''}${d.q ? '<span class="cq">📖</span>' : ''}</button>`;
 }
 function renderCombat() {
-  if (!CB) return;
+  if (!CB || window.SIM) return;
   const f = CB.foe;
   app.innerHTML = `${rgHeader()}
     <div class="arena">
@@ -538,13 +557,13 @@ async function startTurn() {
   CB.tmp = { rage: 0, flex: 0, sutra: false };
   if (CB.nextBlock) { CB.block += CB.nextBlock; CB.nextBlock = 0; }
   if (CB.turn === 1 && hasR('pot')) CB.block += 8;
-  if (CB.turn === 1 && hasR('bulwark')) CB.block += 12;
+  if (CB.turn === 1 && hasR('bulwark')) CB.block += 8;
   if (CB.turn === 1 && hasR('notebook')) drawCards(1);
   if (CB.turn === 1 && hasR('ring')) { CB.foe.poison += 4; drawCards(2); }
   if (CB.powers.ironskin) CB.block += CB.powers.ironskin;
   if (CB.powers.noxious) CB.foe.poison += CB.powers.noxious;
   if (CB.turn >= 3 && hasR('hourglass')) CB.block += 4;
-  drawCards(RG_HAND + (CB.powers.library || 0)); CB.energy = 0; renderCombat();
+  drawCards(RG_HAND + (CB.powers.library || 0) + (hasR('astrolabe') ? 1 : 0)); CB.energy = 0; renderCombat();
   const r = await ask(pickQ(), { bet: true, title: `⚡ ターン${CB.turn}：知識チャージ` });
   if (!CB) return;
   if (CB.foe.hp <= 0) { CB.busy = false; return winCombat(); }
@@ -555,6 +574,7 @@ async function startTurn() {
   if (CB.turn === 1 && hasR('lamp')) e++;
   if (r.ok) { if (hasR('scroll')) drawCards(1); if (CB.powers.curio) CB.block += CB.powers.curio; }
   if (CB.powers.genius) CB.str += CB.powers.genius;
+  e += ['crown', 'sozu', 'velvet', 'mark'].filter(hasR).length;
   CB.energy = e; CB.busy = false;
   renderCombat();
   const en = $('.energy'); if (en) { en.classList.add('charge'); const rc = en.getBoundingClientRect(); floatText(`+${e}⚡${r.ok && r.conf === 3 ? ' 💪+1' : ''}`, rc.left + rc.width / 2, rc.top, '#ffcc33', 24); }
@@ -565,6 +585,7 @@ async function playCard(i) {
   const d = CARDS[c.id], cost = cardCost(c);
   if (d.t === 'curse') return toast('このカードは使えない');
   if (cost > CB.energy) { const en = $('.energy'); if (en) { en.classList.remove('shake'); void en.offsetWidth; en.classList.add('shake'); } return toast('⚡エネルギーが足りない'); }
+  if (hasR('velvet') && CB.played >= 6) return toast('📿 このターンはもう使えない');
   CB.busy = true; const x = CB.energy; CB.energy -= cost; CB.hand.splice(i, 1);
   const el = $$('.hand .rcard')[i]; if (el) el.classList.add('played');
   await sleep(120);
@@ -609,7 +630,7 @@ async function endTurn() {
   CB.busy = true;
   if (CB.powers.fort) CB.block += CB.powers.fort;
   const doubts = CB.hand.filter(c => c.id === 'doubt').length;
-  CB.discard.push(...CB.hand.filter(c => c.id !== 'shiv')); CB.hand = [];
+  if (!hasR('runic')) { CB.discard.push(...CB.hand.filter(c => c.id !== 'shiv')); CB.hand = []; }
   CB.str -= CB.tmp.flex; CB.tmp.flex = 0;
   renderCombat();
   if (doubts) { RG.hp = Math.max(0, RG.hp - 2 * doubts); pfloat(`😵 迷い -${2 * doubts}`, '#ff5c7a'); if (RG.hp <= 0) return loseRun(); }
@@ -662,7 +683,7 @@ function randCard(minR = 1, boost = 0) {
 }
 function addCard(c) { RG.deck.push(c); RG.stats.cards++; }
 function gainRelic() {
-  const left = Object.keys(RRELICS).filter(r => !RG.relics.includes(r) && !RRELICS[r].starter);
+  const left = Object.keys(RRELICS).filter(r => !RG.relics.includes(r) && !RRELICS[r].starter && !RRELICS[r].boss);
   if (!left.length) { RG.gold += 50; return null; }
   const r = left[rand(left.length)]; RG.relics.push(r); if (RRELICS[r].on) RRELICS[r].on();
   toast(`${rlc(r).e} ${rlc(r).n}：${rlc(r).d}`); return r;
@@ -676,13 +697,13 @@ function dropEvidence() {
 async function winCombat() {
   const kind = CB.kind, f = CB.foe;
   // 鬼：ボスは倒れても第2形態で蘇る
-  if (kind === 'boss' && DIFF().boss2 && !f.phase2) {
+  if (kind === 'boss' && lastAct() && DIFF().boss2 && !f.phase2) {
     CB.busy = true; f.phase2 = true;
     const el = $('#foe'); if (el) el.classList.add('dead');
     sfx.fever(); burst(innerWidth / 2, 160, 60); await sleep(900);
-    f.maxHp = Math.round(f.maxHp * .7); f.hp = f.maxHp; f.str += 3; f.block = 0; f.weak = 0; f.vuln = 0; f.poison = 0;
+    f.maxHp = Math.round(f.maxHp * .45); f.hp = f.maxHp; f.str += 2; f.block = 0; f.weak = 0; f.vuln = 0; f.poison = 0;
     f.n = '真・' + f.n; f.e = '👹'; f.mi = -1;
-    f.moves = [{ atk: 11, times: 2 }, { atk: 30 }, { block: 20, weak: 2, vuln: 2 }, { atk: 6, times: 4 }];
+    f.moves = [{ atk: 9, times: 2 }, { atk: 25 }, { block: 18, weak: 2, vuln: 1 }, { atk: 5, times: 4 }];
     nextIntent(); toast('👹 第2形態！ 真の姿を現した！');
     CB.busy = false; renderCombat(); return;
   }
@@ -692,12 +713,12 @@ async function winCombat() {
   await sleep(700);
   if (hasR('scarab')) RG.hp = Math.min(RG.maxHp, RG.hp + 5);
   if (hasR('blood')) RG.hp = Math.min(RG.maxHp, RG.hp + 6);
-  if (kind === 'boss') { CB = null; return rgEndRun(true); }
+  if (kind === 'boss') { CB = null; return lastAct() ? rgEndRun(true) : renderBossRelic(); }
   let gold = kind === 'elite' ? 30 + rand(15) : 12 + rand(10); if (hasR('idol')) gold = Math.round(gold * 1.5); if (hasR('coin')) gold = Math.round(gold * 1.2);
   RG.gold += gold;
   const relic = kind === 'elite' ? gainRelic() : null;
   const ev = kind === 'elite' || Math.random() < .35 ? dropEvidence() : null;
-  const n = 3 + (hasR('book') ? 1 : 0);
+  const n = 3 + (hasR('book') ? 1 : 0) - (hasR('crown') ? 1 : 0);
   RG.reward = { cards: Array.from({ length: n }, () => randCard(1, kind === 'elite' ? .1 : 0)), gold, relic, ev, claim: f.claim, foe: f.n, e: f.e };
   CB = null; saveRun();
   renderReward();
@@ -764,6 +785,7 @@ function renderRest() {
     <button class="relic" data-act="rgrest:up"><div class="ri">📚</div><div><b>研究する</b><div class="ghost">📖 1問正解でカードを1枚強化（外すと強化なし）</div></div></button></div></div>`;
 }
 async function restChoice(k) {
+  if (k === 'heal' && hasR('sozu')) { toast('⚱️ 封印の壺のせいで休めない…'); return; }
   if (k === 'heal') { RG.hp = Math.min(RG.maxHp, RG.hp + Math.round(RG.maxHp * DIFF().restHeal)); sfx.coin(); return completeNode(); }
   const r = await ask(pickQ(), { title: '📚 研究：正解でカード強化' });
   if (!r.ok) { toast('研究は実らなかった…'); return completeNode(); }
@@ -774,7 +796,7 @@ function renderShop() {
   if (!RG.shop || RG.shop.at !== RG.cur.f) {
     const disc = hasR('compass') ? .75 : 1, price = c => Math.round(({ 1: 50, 2: 75, 3: 140 }[CARDS[c.id].r] + rand(15)) * disc);
     const cards = Array.from({ length: 5 }, () => randCard(1, .05)).map(c => ({ c, p: price(c) }));
-    const left = Object.keys(RRELICS).filter(r => !RG.relics.includes(r) && !RRELICS[r].starter);
+    const left = Object.keys(RRELICS).filter(r => !RG.relics.includes(r) && !RRELICS[r].starter && !RRELICS[r].boss);
     const relics = shuffle(left).slice(0, 2).map(r => ({ r, p: Math.round((140 + rand(40)) * disc) }));
     RG.shop = { at: RG.cur.f, cards, relics, rm: Math.round(75 * disc), rmUsed: false };
   }
@@ -825,7 +847,7 @@ function deckModal() {
 // ============================================================
 function loseRun() { CB = null; rgEndRun(false); }
 function rgEndRun(win) {
-  const t = rTheme(), m = rMeta(metaKey(RG.tid, RG.dg)), floor = RG.cur ? RG.cur.f + 1 : RG.at ? RG.at.f + 1 : 0;
+  const t = rTheme(), m = rMeta(metaKey(RG.tid, RG.dg)), floor = RG.cur ? gFloor(RG.cur.f) : RG.at ? gFloor(RG.at.f) : actOf() * RG_FLOORS;
   m.best = Math.max(m.best, floor);
   let unlocked = false;
   if (win) { m.wins++; m.wins_[RG.diff] = (m.wins_[RG.diff] || 0) + 1; if (RG.asc >= m.asc && m.asc < RG_MAX_ASC) { m.asc++; unlocked = true; } }
@@ -857,7 +879,10 @@ function rogueAct(act, arg, b) {
   switch (act) {
     case 'rgentry': rogueEntry(arg); return true;
     case 'rgnew': rgNewRun(RGE); return true;
-    case 'rgcont': RG = S.rgRun; if (RG.blessOpts) renderBlessing(); else if (RG.reward) renderReward(); else renderMap(); return true;
+    case 'rgcont': RG = S.rgRun;
+      // 塔の階数が変わった更新の前から続いているランは、デッキ・遺物・HPはそのままで地図だけ作り直す
+      if (!RG.map || RG.map.length !== RG_FLOORS - 1) { RG.map = genMap(DIFF().eliteBoost); RG.at = null; RG.cur = null; RG.path = []; saveRun(); toast('🏗️ 塔が改装されたので、この層の地図を新しくしました'); }
+      if (RG.bossOpts) renderBossRelic(); else if (RG.blessOpts) renderBlessing(); else if (RG.reward) renderReward(); else renderMap(); return true;
     case 'rgabandon': if (confirm('今の挑戦を放棄しますか？')) { const tid = S.rgRun.tid; S.rgRun = null; save(); rogueEntry(tid); } return true;
     case 'rgasc': { const m = rMeta(metaKey(RGE, RGD)); S.rgAscSel = Math.max(0, Math.min(m.asc, (S.rgAscSel ?? m.asc) + +arg)); rogueEntry(RGE); return true; }
     case 'rgdg': S.rgDgSel = S.rgDgSel || {}; S.rgDgSel[RGE] = arg; S.rgAscSel = null; save(); rogueEntry(RGE); return true;
@@ -884,6 +909,7 @@ function rogueAct(act, arg, b) {
     case 'rgremove': RG.pendingRemove = false; pickCard('削除するカードを選ぶ', () => true, c => { RG.deck.splice(RG.deck.indexOf(c), 1); saveRun(); completeNode(); }); return true;
     case 'rgrest': restChoice(arg); return true;
     case 'rgbuy': buy(arg); return true;
+    case 'rgbossrelic': nextAct(+arg); return true;
     case 'rgpk': { const x = PICK && PICK.list[+arg]; if (x) { const cb = PICK.cb; PICK = null; cb(x.c); } return true; }
     case 'rgpkback': { const bk = PICK && PICK.back; PICK = null; if (bk) bk(); return true; }
   }
@@ -895,7 +921,7 @@ function rogueKey(e) {
   if (screen === 'rg-combat' && CB && !CB.busy) {
     if (/^[1-9]$/.test(k)) playCard(+k - 1);
     else if (k === 'e' || k === 'E') endTurn();
-  } else if ((screen === 'rg-bless' || screen === 'rg-event') && /^[1-3]$/.test(k)) { const b = $$('.relic')[+k - 1]; if (b) b.click(); }
+  } else if ((screen === 'rg-bless' || screen === 'rg-event' || screen === 'rg-boss') && /^[1-3]$/.test(k)) { const b = $$('.relic')[+k - 1]; if (b) b.click(); }
   else if ((screen === 'rg-end' || screen === 'rg-chest') && k === 'Enter') { const p = $('.btn.primary.big'); if (p) p.click(); }
 }
 
@@ -954,4 +980,30 @@ function pullRole() {
       <div class="row"><button class="btn" data-act="close">OK</button>${S.coins >= roleCost() ? `<button class="btn primary" data-act="rpullagain">もう1回</button>` : ''}</div>`, 'glow-' + rar);
     renderGacha();
   }, 1100);
+}
+
+// ============================================================
+//  層の切り替え：ボス遺物を選んで次の層へ
+// ============================================================
+function renderBossRelic() {
+  screen = 'rg-boss';
+  const left = Object.keys(RRELICS).filter(r => RRELICS[r].boss && !RG.relics.includes(r));
+  RG.bossOpts = RG.bossOpts || shuffle(left).slice(0, 3);
+  saveRun();
+  sfx.level(); burst(innerWidth / 2, 160, 60);
+  app.innerHTML = `${rgHeader()}<div class="relic-head"><div class="bigemoji">👑</div><h2>第${actOf() + 1}層 踏破！</h2>
+    <p class="ghost">ボス遺物を1つ選ぶ。強力だが代償がある</p></div>
+    <div class="relics">${RG.bossOpts.map((r, i) => `<button class="relic boss" data-act="rgbossrelic:${i}"><div class="ri">${rlc(r).e}</div><div><b>${esc(rlc(r).n)}</b><div class="ghost">${esc(rlc(r).d)}</div></div><span class="k">${i + 1}</span></button>`).join('')}</div>
+    <p class="ghost" style="text-align:center;margin-top:10px">次の層に進むとHPが減った分の75%回復する</p>`;
+}
+function nextAct(i) {
+  const r = RG.bossOpts && RG.bossOpts[i]; if (!r) return;
+  RG.relics.push(r); if (RRELICS[r].on) RRELICS[r].on();
+  RG.bossOpts = null;
+  RG.act = actOf() + 1;
+  RG.hp = Math.min(RG.maxHp, RG.hp + Math.round((RG.maxHp - RG.hp) * .75));
+  RG.map = genMap(DIFF().eliteBoost); RG.at = null; RG.cur = null; RG.path = []; RG.shop = null;
+  const m = rMeta(metaKey(RG.tid, RG.dg)); m.best = Math.max(m.best, actOf() * RG_FLOORS);
+  saveRun(); sfx.fever(); toast(`${rlc(r).e} ${rlc(r).n} ／ 第${RG.act + 1}層へ！`);
+  renderMap();
 }
