@@ -165,3 +165,7 @@ body.fever-bg{background:radial-gradient(1200px 600px at 50% -10%,#86502f 0%,var
 .modal{padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom))}
 html,body{overscroll-behavior:none}
 body{-webkit-text-size-adjust:100%;-webkit-touch-callout:none}
+/* コード付きの問題（Java など） */
+.qbox .qcode{margin:10px 0 0;padding:8px 10px;background:#0d0b1c;color:#e8e4ff;border-radius:10px;text-align:left;
+  font:600 12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow-x:auto;max-height:42vh;overflow-y:auto;
+  border:1px solid rgba(255,255,255,.08);letter-spacing:0}

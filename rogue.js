@@ -407,7 +407,7 @@ function ask(item, opt = {}) {
     const bet = opt.bet ? `<div class="confs two">${[2, 3].map(n => `<button class="conf c${n} ${n === 2 ? 'on' : ''}" data-q="cf:${n}">${n === 2 ? `★★ 普通<small>正解3⚡ ／ 外${DIFF().missE}⚡</small>` : `★★★ 確信<small>正解4⚡+知識1 ／ 外1⚡${DIFF().betLoss ? `・知識-${DIFF().betLoss}` : ''}</small>`}</button>`).join('')}</div>` : '';
     const lim = DIFF().qTime;
     ov.innerHTML = `<div class="qin"><div class="qtitle">${esc(opt.title || '📖 出題')}</div>
-      <div class="qbox tq"><div class="ask">${TYPE_LABEL[q.type]}</div><div class="q ${q.q.length > 28 ? 'long' : ''}">${qText(q)}</div>
+      <div class="qbox tq"><div class="ask">${TYPE_LABEL[q.type]}</div><div class="q ${q.code || q.q.length > 28 ? 'long' : ''}">${qText(q)}</div>
       ${lim ? `<div class="qtimer"><i class="qlim"></i></div>` : ''}</div>
       ${bet}<div class="qans"></div><div class="qfb"></div></div>`;
     document.body.appendChild(ov);

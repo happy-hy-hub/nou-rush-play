@@ -13,6 +13,8 @@ function niceStep(range) {
 // 問題文（穴埋めの空欄・ハイ＆ローの基準値を強調）
 function qText(q) {
   let s = esc(q.q).replace('＿＿', '<span class="blank">＿＿</span>');
+  // コード付きの問題（Java など）。問題文の下に等幅で出す
+  if (q.code) s += `<pre class="qcode">${esc(q.code)}</pre>`;
   if (q.type === 'hilo') s += `<div class="hiref">答えは <b>${fmt(q.ref)}${esc(q.unit || '')}</b> より…？</div>`;
   return s;
 }

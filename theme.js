@@ -222,7 +222,7 @@ function renderQ() {
       <div class="combo" id="cb">${TR.combo >= 2 ? `${TR.combo} COMBO<small>×${tMult(TR.combo).toFixed(1)}</small>` : ''}</div></div>
       <div class="relicbar">${TR.relics.map(r => `<span title="${esc(r.name)}：${esc(r.desc)}">${r.icon}</span>`).join('')}
         <em>${dropGauge()}</em></div>`}
-    <div class="qbox tq" id="qb">${tag}<div class="ask">${TYPE_LABEL[q.type]}</div><div class="q ${q.q.length > 28 ? 'long' : ''}">${qText(q)}</div>
+    <div class="qbox tq" id="qb">${tag}<div class="ask">${TYPE_LABEL[q.type]}</div><div class="q ${q.code || q.q.length > 28 ? 'long' : ''}">${qText(q)}</div>
       <div class="qtimer"><i id="qt"></i></div></div>
     ${confs}
     <div id="ans"></div>

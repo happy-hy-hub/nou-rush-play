@@ -4,7 +4,8 @@ function registerTheme(t) { if (!THEMES.some(x => x.id === t.id)) THEMES.push(t)
 // 進捗のキーは「何番目か」ではなく「内容」から作る（問題の追加・並べ替えをしても記録がずれない）
 const chash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
 // 問題文だけでなく答え・組・選択肢も含める（「漢字と読みを結べ」のような同じ問題文の別問題を区別する）
-const qSig = q => `${q.type}\n${q.q}\n${JSON.stringify(q.a !== undefined ? q.a : q.pairs || q.items || q.correct || '')}`;
+// コード付きの問題はコードもキーに含める（同じ問題文でもコードが違えば別の問題）
+const qSig = q => `${q.type}\n${q.q}\n${JSON.stringify(q.a !== undefined ? q.a : q.pairs || q.items || q.correct || '')}${q.code ? '\n' + q.code : ''}`;
 const qKey = (t, ci, qi) => `${t.id}|k${chash(qSig(t.chapters[ci].questions[qi]))}`;
 const qKeyV2 = (t, ci, qi) => `${t.id}|q${chash(t.chapters[ci].questions[qi].q)}`; // 保存形式 v2 のキー（移行用）
 const fKey = (t, ci, fi) => `f${chash(t.chapters[ci].facts[fi].text)}`;
